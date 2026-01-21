@@ -35,6 +35,10 @@ from utils import rotation_matrix_between, rot_disp_for_dir, project_to_plane, g
 
 # ---------------------------------------------------------------------------- #
 wp.init()
+# wp.config.cache_kernels = False
+# wp.config.print_launches = True
+# wp.config.verbose = False
+
 WP_GRAVITY_ZERO = wp.zeros(1, dtype=wp.vec3)
 # gravity in cm/s^2
 WP_GRAVITY_EARTH = wp.array(wp.vec3(0.0, 0.0, -9.81), dtype=wp.vec3)
@@ -174,17 +178,13 @@ def wp_kernel_contact_step_kernel(
     # --------------------------------------------------------------------- #
     #  Mesh query                                                           #
     # --------------------------------------------------------------------- #
-    face_index = int(0)
-    face_u = float(0.0)
-    face_v = float(0.0)
-    sign = float(0.0)
-    max_dist = 1e8
-
-    wp.mesh_query_point(
-        obj_mesh_id, contact_x, max_dist, sign, face_index, face_u, face_v
-    )
-
+    max_dist = wp.float32(1e8)
+    query = wp.mesh_query_point(obj_mesh_id, contact_x, max_dist)
+    face_index = query.face
+    face_u = query.u
+    face_v = query.v
     face_w = 1.0 - face_u - face_v
+    sign = query.sign
 
     i0 = wp.mesh_get_index(obj_mesh_id, face_index * 3 + 0)
     i1 = wp.mesh_get_index(obj_mesh_id, face_index * 3 + 1)
@@ -697,91 +697,90 @@ padding = wp.zeros(1, dtype=float, device="cuda", requires_grad=True)
 #  Build grasp optimizing graph                                      #
 # ------------------------------------------------------------------ #
 tape = wp.Tape()
-wp.capture_begin()
-with tape:
-    # Reset buffers
-    wp.launch(
-        kernel=wp_reset_buffers,
-        dim=NUM_BATCH * NUM_DIRS,
-        inputs=[
-            obj_q,
-            obj_qd,
-            obj_ang,
-            obj_angd,
-            loss,
-            loss_base,
-            loss_hand_pose_l2_reg,
-            loss_self_interp,
-            loss_hand_obj_interp,
-            loss_hand_pose_lower,
-            loss_hand_pose_upper,
-            NUM_DIRS,
-        ],
-        device="cuda",
-    )
+with wp.ScopedCapture(device="cuda") as grasp_optimizing_capture:
+    with tape:
+        # Reset buffers
+        wp.launch(
+            kernel=wp_reset_buffers,
+            dim=NUM_BATCH * NUM_DIRS,
+            inputs=[
+                obj_q,
+                obj_qd,
+                obj_ang,
+                obj_angd,
+                loss,
+                loss_base,
+                loss_hand_pose_l2_reg,
+                loss_self_interp,
+                loss_hand_obj_interp,
+                loss_hand_pose_lower,
+                loss_hand_pose_upper,
+                NUM_DIRS,
+            ],
+            device="cuda",
+        )
 
-    # Forward kinematics
-    newton.eval_fk(model, model.joint_q, model.joint_qd, state)
+        # Forward kinematics
+        newton.eval_fk(model, model.joint_q, model.joint_qd, state)
 
-    # Contact step
-    wp.launch(
-        kernel=wp_kernel_contact_step_kernel,
-        dim=NUM_DIRS * NUM_BATCH * NUM_CONTACTS,
-        inputs=[
-            obj_mesh_id,
-            obj_mesh_vert_normals,
-            state.body_q,
-            contacts.rigid_contact_shape0,
-            model.shape_body,
-            contacts.rigid_contact_point0,
-            dt,
-            padding,
-            w_hand_obj_interp,
-            mu_friction,
-            NUM_DIRS,
-            NUM_CONTACTS,
-            obj_q,
-            obj_qd,
-            obj_ang,
-            obj_angd,
-            loss_hand_obj_interp,
-            obj_com_vec,
-            inertia_scalar,
-        ],
-        device="cuda",
-    )
+        # Contact step
+        wp.launch(
+            kernel=wp_kernel_contact_step_kernel,
+            dim=NUM_DIRS * NUM_BATCH * NUM_CONTACTS,
+            inputs=[
+                obj_mesh_id,
+                obj_mesh_vert_normals,
+                state.body_q,
+                contacts.rigid_contact_shape0,
+                model.shape_body,
+                contacts.rigid_contact_point0,
+                dt,
+                padding,
+                w_hand_obj_interp,
+                mu_friction,
+                NUM_DIRS,
+                NUM_CONTACTS,
+                obj_q,
+                obj_qd,
+                obj_ang,
+                obj_angd,
+                loss_hand_obj_interp,
+                obj_com_vec,
+                inertia_scalar,
+            ],
+            device="cuda",
+        )
 
-    # Loss aggregation
-    wp.launch(
-        kernel=wp_kernel_compute_total_loss,
-        dim=max(NUM_BATCH * NUM_DIRS, NUM_BATCH * (NUM_JOINTS - 7)),
-        inputs=[
-            model.joint_q,
-            joint_limit_lower,
-            joint_limit_upper,
-            obj_q,
-            obj_qd,
-            obj_angd,
-            loss_self_interp,
-            loss_hand_obj_interp,
-            w_base,
-            w_l2_mid,
-            w_limit,
-            radius,
-            NUM_BATCH,
-            NUM_DIRS,
-            NUM_JOINTS,
-            loss,
-            loss_base,
-            loss_hand_pose_l2_reg,
-            loss_hand_pose_lower,
-            loss_hand_pose_upper,
-        ],
-        device="cuda",
-    )
-
-tape.backward(loss)
-grasp_optimizing_graph = wp.capture_end()
+        # Loss aggregation
+        wp.launch(
+            kernel=wp_kernel_compute_total_loss,
+            dim=max(NUM_BATCH * NUM_DIRS, NUM_BATCH * (NUM_JOINTS - 7)),
+            inputs=[
+                model.joint_q,
+                joint_limit_lower,
+                joint_limit_upper,
+                obj_q,
+                obj_qd,
+                obj_angd,
+                loss_self_interp,
+                loss_hand_obj_interp,
+                w_base,
+                w_l2_mid,
+                w_limit,
+                radius,
+                NUM_BATCH,
+                NUM_DIRS,
+                NUM_JOINTS,
+                loss,
+                loss_base,
+                loss_hand_pose_l2_reg,
+                loss_hand_pose_lower,
+                loss_hand_pose_upper,
+            ],
+            device="cuda",
+        )
+    tape.backward(loss)
+grasp_optimizing_graph = grasp_optimizing_capture.graph
 
 # ------------------------------------------------------------------ #
 #  Renderer setup                                                    #
@@ -895,6 +894,7 @@ def optimize(it):
     # Update stats
     loss_np = loss.numpy()
     if np.any(np.isnan(loss_np)):
+        print(f"Loss is NaN at iteration {it}")
         return
 
     step_it_total_loss = loss_np[0]
@@ -990,13 +990,15 @@ def render_batch(batch_idx: int, batch_joint_q: wp.array(dtype=float)) -> None:
 
 # ------------------------------------------------------------------------------#
 if __name__ == "__main__":
-    for _ in range(NUM_BATCH_PER_OBJ):
+    for b in range(NUM_BATCH_PER_OBJ):
+        print(b, "Sampling initial hand poses...")
         sample_init_hand_pose()
-        print("Start grasp optimization...")
+
+        print(b, "Start grasp optimization...")
         for _ in range(NUM_ITERS):
             optimize(_)
 
-        print("Visualizing Grasps...")
+        print(b, "Visualizing Grasps...")
         for _ in range(NUM_ITERS):
             with wp.ScopedTimer("render", active=False):
                 render_batches(_, save_results=True)
