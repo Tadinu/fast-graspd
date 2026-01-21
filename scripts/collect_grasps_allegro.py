@@ -999,7 +999,7 @@ if __name__ == "__main__":
         print("Visualizing Grasps...")
         for _ in range(NUM_ITERS):
             with wp.ScopedTimer("render", active=False):
-                render_batches(_)
+                render_batches(_, save_results=True)
 
     # Close viewer
     renderer.viewer.close()
