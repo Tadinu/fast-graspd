@@ -1,5 +1,5 @@
 obj_set: ycb
-obj_name: 002_master_chef_can
+obj_name: 035_power_drill
 hand_name: allegro
 # Optional configuration values (all have sensible defaults in the script)
 # If you wish to override them, simply uncomment and set as desired.

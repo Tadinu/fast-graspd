@@ -1,3 +1,4 @@
 outputs/
 examples/
 grasp_outputs/
+*/__pycache__/
