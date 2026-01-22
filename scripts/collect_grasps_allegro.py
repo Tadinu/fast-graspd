@@ -22,7 +22,6 @@ from pathlib import Path
 import hydra
 import numpy as np
 import trimesh as tri
-import warp.context
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig
 from pyquaternion import Quaternion
@@ -36,12 +35,17 @@ from utils import rotation_matrix_between, rot_disp_for_dir, project_to_plane, g
 # ---------------------------------------------------------------------------- #
 wp.init()
 # wp.config.cache_kernels = False
+# wp.config.verify_autograd_array_access = True
+# wp.config.mode = "debug"
 # wp.config.print_launches = True
 # wp.config.verbose = False
 
 WP_GRAVITY_ZERO = wp.zeros(1, dtype=wp.vec3)
 # gravity in cm/s^2
 WP_GRAVITY_EARTH = wp.array(wp.vec3(0.0, 0.0, -9.81), dtype=wp.vec3)
+
+WP_DEVICE = "cuda:0"
+WP_LOSS_DIFFERENTIABLE = True
 
 
 # ---------------------------------------------------------------------------- #
@@ -70,7 +74,7 @@ def wp_kernel_copy_joint_q_for_render(
 #  Reset per-iteration buffers, now including rotational state               #
 # -------------------------------------------------------------------------- #
 @wp.kernel
-def wp_reset_buffers(
+def wp_kernel_reset_buffers(
         obj_q: wp.array(dtype=wp.vec3, ndim=2),  # N_BATCH × N_DIRS (translation)
         obj_qd: wp.array(dtype=wp.vec3, ndim=2),  # N_BATCH × N_DIRS (linear vel.)
         obj_ang: wp.array(dtype=wp.vec3, ndim=2),  # rotational displacement (axis-angle)
@@ -124,6 +128,9 @@ def wp_kernel_contact_step_kernel(
         padding: wp.array(dtype=float, ndim=1),
         w_hand_obj_interp: float,
         MU: float,
+        # constant inputs for torque calc
+        obj_com: wp.vec3,
+        inertia_scalar: float,
         # sizes
         NUM_DIRS: wp.int32,
         NUM_CONTACTS: wp.int32,
@@ -133,9 +140,6 @@ def wp_kernel_contact_step_kernel(
         obj_ang: wp.array(dtype=wp.vec3, ndim=2),  # rotation (axis-angle)
         obj_angd: wp.array(dtype=wp.vec3, ndim=2),  # angular velocity
         loss_hand_obj_interp: wp.array(dtype=float, ndim=1),
-        # constant inputs for torque calc
-        obj_com: wp.vec3,
-        inertia_scalar: float,
 ):
     """
     Compute contact response for each (batch, direction, contact) tuple.
@@ -589,8 +593,8 @@ builder.shape_collision_filter_pairs = {
     (i, j) for i in range(builder.shape_count) for j in range(builder.shape_count)
 }
 
-model = builder.finalize("cuda")
-model.requires_grad = True
+model = builder.finalize(WP_DEVICE)
+model.requires_grad = WP_LOSS_DIFFERENTIABLE
 model.ground = True
 model.joint_attach_ke = 1600.0
 model.joint_attach_kd = 20.0
@@ -600,8 +604,8 @@ contacts = model.collide(state)
 
 NUM_CONTACTS = len(contacts.rigid_contact_shape0) // NUM_BATCH
 
-model.joint_q.requires_grad = True
-state.body_q.requires_grad = True
+model.joint_q.requires_grad = WP_LOSS_DIFFERENTIABLE
+state.body_q.requires_grad = WP_LOSS_DIFFERENTIABLE
 
 # ------------------------------------------------------------------ #
 #  Load target object mesh                                           #
@@ -622,32 +626,32 @@ obj_mesh_tri = tri.load_mesh(to_absolute_path(obj_path))
 joint_limit_lower = wp.array(
     data=np.asarray(builder.joint_limit_lower, dtype=np.float32),
     dtype=float,
-    device="cuda",
-    requires_grad=True,
+    device=WP_DEVICE,
+    requires_grad=WP_LOSS_DIFFERENTIABLE,
 )
 joint_limit_upper = wp.array(
     data=np.asarray(builder.joint_limit_upper, dtype=np.float32),
     dtype=float,
-    device="cuda",
-    requires_grad=True,
+    device=WP_DEVICE,
+    requires_grad=WP_LOSS_DIFFERENTIABLE,
 )
 obj_mesh_verts = wp.array(
     data=obj_mesh_tri.vertices,
     dtype=wp.vec3,
-    device="cuda",
-    requires_grad=True,
+    device=WP_DEVICE,
+    requires_grad=WP_LOSS_DIFFERENTIABLE,
 )
 obj_mesh_inds = wp.array(
     data=obj_mesh_tri.faces.flatten(),
     dtype=int,
-    device="cuda",
-    requires_grad=True,
+    device=WP_DEVICE,
+    requires_grad=WP_LOSS_DIFFERENTIABLE,
 )
 obj_mesh_vert_normals = wp.array(
     data=obj_mesh_tri.vertex_normals,
     dtype=wp.vec3,
-    device="cuda",
-    requires_grad=True,
+    device=WP_DEVICE,
+    requires_grad=WP_LOSS_DIFFERENTIABLE,
 )
 
 obj_mesh = wp.Mesh(obj_mesh_verts, obj_mesh_inds)
@@ -671,7 +675,7 @@ obj_mesh_id = obj_mesh.id
 # ------------------------------------------------------------------ #
 #  Allocate optimisation buffers                                     #
 # ------------------------------------------------------------------ #
-obj_q = wp.zeros((NUM_BATCH, NUM_DIRS), dtype=wp.vec3, device="cuda", requires_grad=True)
+obj_q = wp.zeros((NUM_BATCH, NUM_DIRS), dtype=wp.vec3, device=WP_DEVICE, requires_grad=WP_LOSS_DIFFERENTIABLE)
 obj_qd = wp.zeros_like(obj_q)
 
 # ------------------------------------------------------------------ #
@@ -680,10 +684,10 @@ obj_qd = wp.zeros_like(obj_q)
 # We represent small orientation changes as an axis-angle vector      #
 # capturing the integrated angular displacement for each optimisation
 # step.  The corresponding time-derivative stores angular velocity.    #
-obj_ang = wp.zeros((NUM_BATCH, NUM_DIRS), dtype=wp.vec3, device="cuda", requires_grad=True)
-obj_angd = wp.zeros_like(obj_ang, requires_grad=True)
+obj_ang = wp.zeros((NUM_BATCH, NUM_DIRS), dtype=wp.vec3, device=WP_DEVICE, requires_grad=WP_LOSS_DIFFERENTIABLE)
+obj_angd = wp.zeros_like(obj_ang, requires_grad=WP_LOSS_DIFFERENTIABLE)
 
-loss = wp.zeros(1, dtype=float, device="cuda", requires_grad=True)
+loss = wp.zeros(1, dtype=float, device=WP_DEVICE, requires_grad=WP_LOSS_DIFFERENTIABLE)
 loss_base = wp.zeros_like(loss)
 loss_hand_pose_l2_reg = wp.zeros_like(loss)
 loss_hand_pose_upper = wp.zeros_like(loss)
@@ -691,96 +695,111 @@ loss_hand_pose_lower = wp.zeros_like(loss)
 loss_self_interp = wp.zeros_like(loss)
 loss_hand_obj_interp = wp.zeros_like(loss)
 
-padding = wp.zeros(1, dtype=float, device="cuda", requires_grad=True)
+padding = wp.zeros(1, dtype=float, device=WP_DEVICE, requires_grad=WP_LOSS_DIFFERENTIABLE)
+
 
 # ------------------------------------------------------------------ #
 #  Build grasp optimizing graph                                      #
 # ------------------------------------------------------------------ #
+def optimize_grasp():
+    # Reset buffers
+    wp.launch(
+        kernel=wp_kernel_reset_buffers,
+        dim=NUM_BATCH * NUM_DIRS,
+        inputs=[
+            obj_q,
+            obj_qd,
+            obj_ang,
+            obj_angd,
+            loss,
+            loss_base,
+            loss_hand_pose_l2_reg,
+            loss_self_interp,
+            loss_hand_obj_interp,
+            loss_hand_pose_lower,
+            loss_hand_pose_upper,
+            NUM_DIRS,
+        ],
+        device=WP_DEVICE,
+    )
+
+    # Forward kinematics
+    newton.eval_fk(model, model.joint_q, model.joint_qd, state)
+
+    # Contact step
+    wp.launch(
+        kernel=wp_kernel_contact_step_kernel,
+        dim=NUM_DIRS * NUM_BATCH * NUM_CONTACTS,
+        inputs=[
+            obj_mesh_id,
+            obj_mesh_vert_normals,
+            state.body_q,
+            contacts.rigid_contact_shape0,
+            model.shape_body,
+            contacts.rigid_contact_point0,
+            dt,
+            padding,
+            w_hand_obj_interp,
+            mu_friction,
+            obj_com_vec,
+            inertia_scalar,
+            NUM_DIRS,
+            NUM_CONTACTS
+        ],
+        outputs=[
+            obj_q,
+            obj_qd,
+            obj_ang,
+            obj_angd,
+            loss_hand_obj_interp
+        ],
+        device=WP_DEVICE,
+    )
+
+    # Loss aggregation
+    wp.launch(
+        kernel=wp_kernel_compute_total_loss,
+        dim=max(NUM_BATCH * NUM_DIRS, NUM_BATCH * (NUM_JOINTS - 7)),
+        inputs=[
+            model.joint_q,
+            joint_limit_lower,
+            joint_limit_upper,
+            obj_q,
+            obj_qd,
+            obj_angd,
+            loss_self_interp,
+            loss_hand_obj_interp,
+            w_base,
+            w_l2_mid,
+            w_limit,
+            radius,
+            NUM_BATCH,
+            NUM_DIRS,
+            NUM_JOINTS
+        ],
+        outputs=[
+            loss,
+            loss_base,
+            loss_hand_pose_l2_reg,
+            loss_hand_pose_lower,
+            loss_hand_pose_upper
+        ],
+        device=WP_DEVICE,
+    )
+
+
+# NOTE: Only capture the tape's forward launches of [optimize_grasp()] into [grasp_optimizing_graph]
+# For some reason (probably like in Pytorch, backward pass depends on intermediate values or runtime conditions),
+# [tape.backward()] if captured will compromise [grasp_optimizing_graph()] launch.
 tape = wp.Tape()
-with wp.ScopedCapture(device="cuda") as grasp_optimizing_capture:
+with wp.ScopedCapture(device=WP_DEVICE) as grasp_optimizing_capture:
     with tape:
-        # Reset buffers
-        wp.launch(
-            kernel=wp_reset_buffers,
-            dim=NUM_BATCH * NUM_DIRS,
-            inputs=[
-                obj_q,
-                obj_qd,
-                obj_ang,
-                obj_angd,
-                loss,
-                loss_base,
-                loss_hand_pose_l2_reg,
-                loss_self_interp,
-                loss_hand_obj_interp,
-                loss_hand_pose_lower,
-                loss_hand_pose_upper,
-                NUM_DIRS,
-            ],
-            device="cuda",
-        )
-
-        # Forward kinematics
-        newton.eval_fk(model, model.joint_q, model.joint_qd, state)
-
-        # Contact step
-        wp.launch(
-            kernel=wp_kernel_contact_step_kernel,
-            dim=NUM_DIRS * NUM_BATCH * NUM_CONTACTS,
-            inputs=[
-                obj_mesh_id,
-                obj_mesh_vert_normals,
-                state.body_q,
-                contacts.rigid_contact_shape0,
-                model.shape_body,
-                contacts.rigid_contact_point0,
-                dt,
-                padding,
-                w_hand_obj_interp,
-                mu_friction,
-                NUM_DIRS,
-                NUM_CONTACTS,
-                obj_q,
-                obj_qd,
-                obj_ang,
-                obj_angd,
-                loss_hand_obj_interp,
-                obj_com_vec,
-                inertia_scalar,
-            ],
-            device="cuda",
-        )
-
-        # Loss aggregation
-        wp.launch(
-            kernel=wp_kernel_compute_total_loss,
-            dim=max(NUM_BATCH * NUM_DIRS, NUM_BATCH * (NUM_JOINTS - 7)),
-            inputs=[
-                model.joint_q,
-                joint_limit_lower,
-                joint_limit_upper,
-                obj_q,
-                obj_qd,
-                obj_angd,
-                loss_self_interp,
-                loss_hand_obj_interp,
-                w_base,
-                w_l2_mid,
-                w_limit,
-                radius,
-                NUM_BATCH,
-                NUM_DIRS,
-                NUM_JOINTS,
-                loss,
-                loss_base,
-                loss_hand_pose_l2_reg,
-                loss_hand_pose_lower,
-                loss_hand_pose_upper,
-            ],
-            device="cuda",
-        )
-    tape.backward(loss)
+        optimize_grasp()
 grasp_optimizing_graph = grasp_optimizing_capture.graph
+tape.backward(loss)
+# NOTE: tape.gradients (as a dict) will then only contain arrays (their python refs) of green ellipses
+# in the visualizing graph [tape.svg], ones specified with `requires_grad=True`
+# tape.visualize(filename="tape.dot")  # Then type: `dot -Tsvg tape.dot -o tape.svg`
 
 # ------------------------------------------------------------------ #
 #  Renderer setup                                                    #
@@ -811,7 +830,7 @@ render_model_builder.add_urdf(
     # limit_kd=1e1,
 )
 
-render_model = render_model_builder.finalize("cuda")
+render_model = render_model_builder.finalize(WP_DEVICE)
 render_model.ground = False
 render_model.gravity.assign(WP_GRAVITY_ZERO)
 
@@ -888,8 +907,10 @@ def optimize(it):
     pad_val = max(pad_val, 0.0)
     padding.fill_(pad_val)
 
-    # wp.synchronize()
+    # Optimize grasp
     wp.capture_launch(grasp_optimizing_graph)
+    tape.backward(loss)  # NOTE: loss is scalar, so no need to specify `grads`
+    # wp.synchronize()
 
     # Update stats
     loss_np = loss.numpy()
@@ -917,18 +938,20 @@ def optimize(it):
         )
 
     # Optimize grad step
-    wp.launch(
-        kernel=wp_kernel_apply_grad_step,
-        dim=NUM_BATCH * (NUM_JOINTS - 5),
-        inputs=[
-            tape.gradients[model.joint_q],
-            lr,
-            # (NUM_JOINTS - 5) - (it % (NUM_JOINTS - 5)) - 1,
-            NUM_JOINTS,
-        ],
-        outputs=[model.joint_q],
-        device="cuda",
-    )
+    with wp.ScopedCapture(device="cuda") as apply_grad_capture:
+        wp.launch(
+            kernel=wp_kernel_apply_grad_step,
+            dim=NUM_BATCH * (NUM_JOINTS - 5),
+            inputs=[
+                tape.gradients[model.joint_q],
+                lr,
+                # (NUM_JOINTS - 5) - (it % (NUM_JOINTS - 5)) - 1,
+                NUM_JOINTS,
+            ],
+            outputs=[model.joint_q],
+            device=WP_DEVICE,
+        )
+    wp.capture_launch(apply_grad_capture.graph)
 
 
 def render_batches(it, save_results=False):
@@ -971,7 +994,7 @@ def render_batch(batch_idx: int, batch_joint_q: wp.array(dtype=float)) -> None:
             dim=NUM_JOINTS,
             inputs=[batch_joint_q, batch_idx, NUM_JOINTS],
             outputs=[renderer.joint_target_qs],
-            device="cuda",
+            device=WP_DEVICE,
         )
 
         # Save hand base pose from [state.body_q]

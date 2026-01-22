@@ -1,0 +1,158 @@
+digraph " " {
+    graph [fontname="Helvetica,Arial,sans-serif",tooltip=" "];
+    node [style=rounded,shape=plaintext,fontname="Helvetica,Arial,sans-serif", margin="0.05,0.02", width=0, height=0, tooltip=" "];
+    edge [fontname="Helvetica,Arial,sans-serif",tooltip=" "];
+    rankdir=LR;
+
+kernel0 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" border="0" cellspacing="2" cellpadding="4" bgcolor="#888888" gradientangle="0">
+<TR><TD BGCOLOR="#ffffffaa" colspan="2" align="center"><b>wp_reset_buffers</b></TD></TR>
+<TR><TD PORT="in_0" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.vec3f"><font color="black">obj_q</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_1" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.vec3f"><font color="black">obj_qd</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_2" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.vec3f"><font color="black">obj_ang</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_3" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.vec3f"><font color="black">obj_angd</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_4" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">loss</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_5" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">loss_base</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_6" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">loss_hand_pose_l2_reg</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_7" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">loss_self_interp</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_8" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">loss_hand_obj_interp</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_9" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">loss_hand_pose_lower</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_10" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">loss_hand_pose_upper</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_11" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.int32"><font color="black">NUM_DIRS</font></TD><TD BORDER="0"></TD></TR>
+</TABLE>>,tooltip="&#47;media&#47;ducthan&#47;376b23a1-5a02-4960-b3ca-24b2fcef8f891&#47;MUJOCO&#47;MJ_GRASP&#47;fast-graspd&#47;scripts&#47;collect_grasps_allegro.py:708 (optimize_grasp)"];
+arr12918817280 [label="obj_q",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array obj_q / ptr=12918817280, shape=(4, 7), dtype=warp._src.types.vec3f, requires_grad=True"];
+arr12918817280 -> kernel0:in_0
+arr12918903296 [label="obj_qd",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array obj_qd / ptr=12918903296, shape=(4, 7), dtype=warp._src.types.vec3f, requires_grad=True"];
+arr12918903296 -> kernel0:in_1
+arr12918904320 [label="obj_ang",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array obj_ang / ptr=12918904320, shape=(4, 7), dtype=warp._src.types.vec3f, requires_grad=True"];
+arr12918904320 -> kernel0:in_2
+arr12918905344 [label="obj_angd",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array obj_angd / ptr=12918905344, shape=(4, 7), dtype=warp._src.types.vec3f, requires_grad=True"];
+arr12918905344 -> kernel0:in_3
+arr12918906368 [label="loss",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array loss / ptr=12918906368, shape=(1,), dtype=warp._src.types.float32, requires_grad=True"];
+arr12918906368 -> kernel0:in_4
+arr12918908416 [label="loss_base",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array loss_base / ptr=12918908416, shape=(1,), dtype=warp._src.types.float32, requires_grad=True"];
+arr12918908416 -> kernel0:in_5
+arr12918909440 [label="loss_hand_pose_l2_reg",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array loss_hand_pose_l2_reg / ptr=12918909440, shape=(1,), dtype=warp._src.types.float32, requires_grad=True"];
+arr12918909440 -> kernel0:in_6
+arr12918912512 [label="loss_self_interp",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array loss_self_interp / ptr=12918912512, shape=(1,), dtype=warp._src.types.float32, requires_grad=True"];
+arr12918912512 -> kernel0:in_7
+arr12918913536 [label="loss_hand_obj_interp",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array loss_hand_obj_interp / ptr=12918913536, shape=(1,), dtype=warp._src.types.float32, requires_grad=True"];
+arr12918913536 -> kernel0:in_8
+arr12918911488 [label="loss_hand_pose_lower",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array loss_hand_pose_lower / ptr=12918911488, shape=(1,), dtype=warp._src.types.float32, requires_grad=True"];
+arr12918911488 -> kernel0:in_9
+arr12918910464 [label="loss_hand_pose_upper",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array loss_hand_pose_upper / ptr=12918910464, shape=(1,), dtype=warp._src.types.float32, requires_grad=True"];
+arr12918910464 -> kernel0:in_10
+kernel1 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" border="0" cellspacing="2" cellpadding="4" bgcolor="#888888" gradientangle="0">
+<TR><TD BGCOLOR="#ffffffaa" colspan="2" align="center"><b>eval_articulation_fk</b></TD></TR>
+<TR><TD PORT="in_0" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.int32"><font color="black">articulation_start</font></TD><TD PORT="out_0" BGCOLOR="#BBBBBB" align="right"><font color="black">body_q</font></TD></TR>
+<TR><TD PORT="in_1" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.int32"><font color="black">articulation_count</font></TD><TD PORT="out_1" BGCOLOR="#BBBBBB" align="right"><font color="black">body_qd</font></TD></TR>
+<TR><TD PORT="in_2" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.bool"><font color="black">articulation_mask</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_3" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.int32"><font color="black">articulation_indices</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_4" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.int32"><font color="black">joint_articulation</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_5" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">joint_q</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_6" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">joint_qd</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_7" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.int32"><font color="black">joint_q_start</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_8" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.int32"><font color="black">joint_qd_start</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_9" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.int32"><font color="black">joint_type</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_10" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.int32"><font color="black">joint_parent</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_11" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.int32"><font color="black">joint_child</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_12" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.transformf"><font color="black">joint_X_p</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_13" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.transformf"><font color="black">joint_X_c</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_14" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.vec3f"><font color="black">joint_axis</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_15" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.int32"><font color="black">joint_dof_dim</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_16" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.vec3f"><font color="black">body_com</font></TD><TD BORDER="0"></TD></TR>
+</TABLE>>,tooltip="&#47;media&#47;ducthan&#47;376b23a1-5a02-4960-b3ca-24b2fcef8f891&#47;NEWTON&#47;newton&#47;newton&#47;_src&#47;sim&#47;articulation.py:444 (eval_fk)"];
+arr12918723072 [label="articulation_start",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array articulation_start / ptr=12918723072, shape=(5,), dtype=warp._src.types.int32, requires_grad=False"];
+arr12918723072 -> kernel1:in_0
+arr12918714368 [label="joint_articulation",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array joint_articulation / ptr=12918714368, shape=(84,), dtype=warp._src.types.int32, requires_grad=False"];
+arr12918714368 -> kernel1:in_4
+arr12918712320 [label="joint_q",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array joint_q / ptr=12918712320, shape=(92,), dtype=warp._src.types.float32, requires_grad=True"];
+arr12918712320 -> kernel1:in_5
+arr12918712832 [label="joint_qd",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array joint_qd / ptr=12918712832, shape=(88,), dtype=warp._src.types.float32, requires_grad=False"];
+arr12918712832 -> kernel1:in_6
+arr12918722048 [label="joint_q_start",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array joint_q_start / ptr=12918722048, shape=(85,), dtype=warp._src.types.int32, requires_grad=False"];
+arr12918722048 -> kernel1:in_7
+arr12918722560 [label="joint_qd_start",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array joint_qd_start / ptr=12918722560, shape=(85,), dtype=warp._src.types.int32, requires_grad=False"];
+arr12918722560 -> kernel1:in_8
+arr12918703104 [label="joint_type",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array joint_type / ptr=12918703104, shape=(84,), dtype=warp._src.types.int32, requires_grad=False"];
+arr12918703104 -> kernel1:in_9
+arr12918703616 [label="joint_parent",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array joint_parent / ptr=12918703616, shape=(84,), dtype=warp._src.types.int32, requires_grad=False"];
+arr12918703616 -> kernel1:in_10
+arr12918704128 [label="joint_child",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array joint_child / ptr=12918704128, shape=(84,), dtype=warp._src.types.int32, requires_grad=False"];
+arr12918704128 -> kernel1:in_11
+arr12918704640 [label="joint_X_p",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array joint_X_p / ptr=12918704640, shape=(84,), dtype=warp._src.types.transformf, requires_grad=False"];
+arr12918704640 -> kernel1:in_12
+arr12918707200 [label="joint_X_c",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array joint_X_c / ptr=12918707200, shape=(84,), dtype=warp._src.types.transformf, requires_grad=False"];
+arr12918707200 -> kernel1:in_13
+arr12918710784 [label="joint_axis",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array joint_axis / ptr=12918710784, shape=(88,), dtype=warp._src.types.vec3f, requires_grad=False"];
+arr12918710784 -> kernel1:in_14
+arr12918709760 [label="joint_dof_dim",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array joint_dof_dim / ptr=12918709760, shape=(84, 2), dtype=warp._src.types.int32, requires_grad=False"];
+arr12918709760 -> kernel1:in_15
+arr12918701568 [label="body_com",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array body_com / ptr=12918701568, shape=(84,), dtype=warp._src.types.vec3f, requires_grad=False"];
+arr12918701568 -> kernel1:in_16
+arr12918724608 [label="body_q",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array body_q / ptr=12918724608, shape=(84,), dtype=warp._src.types.transformf, requires_grad=True"];
+kernel1:out_0 -> arr12918724608;
+arr12918729728 [label="body_qd",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array body_qd / ptr=12918729728, shape=(84,), dtype=warp._src.types.spatial_vectorf, requires_grad=True"];
+kernel1:out_1 -> arr12918729728;
+kernel2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" border="0" cellspacing="2" cellpadding="4" bgcolor="#888888" gradientangle="0">
+<TR><TD BGCOLOR="#ffffffaa" colspan="2" align="center"><b>wp_kernel_contact_step_kernel</b></TD></TR>
+<TR><TD PORT="in_0" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.uint64"><font color="black">obj_mesh_id</font></TD><TD PORT="out_0" BGCOLOR="#BBBBBB" align="right"><font color="black">obj_q</font></TD></TR>
+<TR><TD PORT="in_1" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.vec3f"><font color="black">obj_mesh_vert_normals</font></TD><TD PORT="out_1" BGCOLOR="#BBBBBB" align="right"><font color="black">obj_qd</font></TD></TR>
+<TR><TD PORT="in_2" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.transformf"><font color="black">body_q</font></TD><TD PORT="out_2" BGCOLOR="#BBBBBB" align="right"><font color="black">obj_ang</font></TD></TR>
+<TR><TD PORT="in_3" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.int32"><font color="black">contact_shape0</font></TD><TD PORT="out_3" BGCOLOR="#BBBBBB" align="right"><font color="black">obj_angd</font></TD></TR>
+<TR><TD PORT="in_4" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.int32"><font color="black">shape_body</font></TD><TD PORT="out_4" BGCOLOR="#BBBBBB" align="right"><font color="black">loss_hand_obj_interp</font></TD></TR>
+<TR><TD PORT="in_5" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.vec3f"><font color="black">contact_point0</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_6" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.float32"><font color="black">dt</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_7" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">padding</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_8" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.float32"><font color="black">w_hand_obj_interp</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_9" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.float32"><font color="black">MU</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_10" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.vec3f"><font color="black">obj_com</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_11" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.float32"><font color="black">inertia_scalar</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_12" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.int32"><font color="black">NUM_DIRS</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_13" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.int32"><font color="black">NUM_CONTACTS</font></TD><TD BORDER="0"></TD></TR>
+</TABLE>>,tooltip="&#47;media&#47;ducthan&#47;376b23a1-5a02-4960-b3ca-24b2fcef8f891&#47;MUJOCO&#47;MJ_GRASP&#47;fast-graspd&#47;scripts&#47;collect_grasps_allegro.py:732 (optimize_grasp)"];
+arr12918779392 [label="obj_mesh_vert_normals",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array obj_mesh_vert_normals / ptr=12918779392, shape=(501,), dtype=warp._src.types.vec3f, requires_grad=True"];
+arr12918779392 -> kernel2:in_1
+arr12918724608 -> kernel2:in_2
+arr12918459904 [label="shape_body",shape=ellipse,style=filled,fillcolor="lightgray",tooltip="Array shape_body / ptr=12918459904, shape=(84,), dtype=warp._src.types.int32, requires_grad=False"];
+arr12918459904 -> kernel2:in_4
+arr12918914560 [label="padding",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array padding / ptr=12918914560, shape=(1,), dtype=warp._src.types.float32, requires_grad=True"];
+arr12918914560 -> kernel2:in_7
+kernel2:out_0 -> arr12918817280;
+kernel2:out_1 -> arr12918903296;
+kernel2:out_2 -> arr12918904320;
+kernel2:out_3 -> arr12918905344;
+kernel2:out_4 -> arr12918913536;
+kernel3 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" border="0" cellspacing="2" cellpadding="4" bgcolor="#888888" gradientangle="0">
+<TR><TD BGCOLOR="#ffffffaa" colspan="2" align="center"><b>wp_kernel_compute_total_loss</b></TD></TR>
+<TR><TD PORT="in_0" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">joint_q</font></TD><TD PORT="out_0" BGCOLOR="#BBBBBB" align="right"><font color="black">loss</font></TD></TR>
+<TR><TD PORT="in_1" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">joint_limit_lower</font></TD><TD PORT="out_1" BGCOLOR="#BBBBBB" align="right"><font color="black">loss_base</font></TD></TR>
+<TR><TD PORT="in_2" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">joint_limit_upper</font></TD><TD PORT="out_2" BGCOLOR="#BBBBBB" align="right"><font color="black">loss_hand_pose_l2_reg</font></TD></TR>
+<TR><TD PORT="in_3" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.vec3f"><font color="black">obj_q</font></TD><TD PORT="out_3" BGCOLOR="#BBBBBB" align="right"><font color="black">loss_hand_pose_lower</font></TD></TR>
+<TR><TD PORT="in_4" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.vec3f"><font color="black">obj_qd</font></TD><TD PORT="out_4" BGCOLOR="#BBBBBB" align="right"><font color="black">loss_hand_pose_upper</font></TD></TR>
+<TR><TD PORT="in_5" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.vec3f"><font color="black">obj_angd</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_6" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">loss_self_interp</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_7" BGCOLOR="#BBBBBB" align="left" title="array: dtype=warp._src.types.float32"><font color="black">loss_hand_obj_interp</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_8" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.float32"><font color="black">w_base</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_9" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.float32"><font color="black">w_l2_mid</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_10" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.float32"><font color="black">w_limit</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_11" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.float32"><font color="black">obj_radius</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_12" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.int32"><font color="black">NUM_BATCH</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_13" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.int32"><font color="black">NUM_DIRS</font></TD><TD BORDER="0"></TD></TR>
+<TR><TD PORT="in_14" BGCOLOR="#BBBBBB" align="left" title="dtype=warp._src.types.int32"><font color="black">NUM_JOINTS</font></TD><TD BORDER="0"></TD></TR>
+</TABLE>>,tooltip="&#47;media&#47;ducthan&#47;376b23a1-5a02-4960-b3ca-24b2fcef8f891&#47;MUJOCO&#47;MJ_GRASP&#47;fast-graspd&#47;scripts&#47;collect_grasps_allegro.py:762 (optimize_grasp)"];
+arr12918712320 -> kernel3:in_0
+arr12918740480 [label="joint_limit_lower",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array joint_limit_lower / ptr=12918740480, shape=(88,), dtype=warp._src.types.float32, requires_grad=True"];
+arr12918740480 -> kernel3:in_1
+arr12918741504 [label="joint_limit_upper",shape=ellipse,style=filled,fillcolor="#76B900",tooltip="Array joint_limit_upper / ptr=12918741504, shape=(88,), dtype=warp._src.types.float32, requires_grad=True"];
+arr12918741504 -> kernel3:in_2
+arr12918817280 -> kernel3:in_3
+arr12918903296 -> kernel3:in_4
+arr12918905344 -> kernel3:in_5
+arr12918912512 -> kernel3:in_6
+arr12918913536 -> kernel3:in_7
+kernel3:out_0 -> arr12918906368;
+kernel3:out_1 -> arr12918908416;
+kernel3:out_2 -> arr12918909440;
+kernel3:out_3 -> arr12918911488;
+kernel3:out_4 -> arr12918910464;
+}

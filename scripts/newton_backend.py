@@ -43,6 +43,8 @@ class NewtonBackend:
         self.sim_time: float = 0.0
         if not kinematic_mode:
             assert num_substeps > 1, f"Newton backend in physics mode requires substeps as larger than 1 for the warmup!"
+            # https://github.com/NVIDIA/warp/discussions/565#discussioncomment-12415701
+            assert num_substeps % 2 == 0, f"Newton backend in physics mode requires substeps as even number!"
         self.sim_substeps: int = num_substeps
         self.sim_dt: float = self.frame_dt / self.sim_substeps
         self.wp_device = wp.get_device()
