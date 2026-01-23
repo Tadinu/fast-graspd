@@ -521,7 +521,7 @@ get_collect_grasps_config()
 
 NUM_DIRS: int = getattr(cfg.collector_config, "num_dirs", 7)
 NUM_BATCH: int = getattr(cfg.collector_config, "batch_size", 4)
-NUM_ITERS: int = getattr(cfg.collector_config, "num_iters", 15_001)
+NUM_ITERS: int = getattr(cfg.collector_config, "num_iters", 30_001)
 
 dt: float = getattr(cfg.collector_config, "dt", 1e-2)
 lr: float = getattr(cfg.collector_config, "lr", 2e-4)
@@ -563,6 +563,22 @@ gripper_urdf_path = to_absolute_path(
 )
 
 # Load batch
+builder.default_spring_ke = 0.0
+builder.default_spring_kd = 0.0
+# Builder shape config
+builder_deft_shape_cfg = builder.default_shape_cfg
+builder_deft_shape_cfg.density = 0.1
+builder_deft_shape_cfg.ke = 1e4
+builder_deft_shape_cfg.kd = 1e2
+builder_deft_shape_cfg.kf = 1e2
+builder_deft_shape_cfg.mu = 1.0
+
+# Builder joint config
+builder_deft_joint_cfg = builder.default_joint_cfg
+builder_deft_joint_cfg.armature = 0.1
+builder_deft_joint_cfg.limit_ke = 1e4
+builder_deft_joint_cfg.limit_kd = 1e1
+
 for _ in range(NUM_BATCH):
     builder.add_urdf(
         gripper_urdf_path,
@@ -571,18 +587,8 @@ for _ in range(NUM_BATCH):
             wp.quat_from_axis_angle(wp.vec3(1.0, 0.0, 0.0), -math.pi * 0.5),
         ),
         floating=True,
-        # density=0.1,
-        # armature=0.1,
-        # stiffness=0.0,
-        # damping=0.0,
-        # contact_ke=1e4,
-        # contact_kd=1e2,
-        # contact_kf=1e2,
-        # contact_mu=1.0,
-        # limit_ke=1e4,
         enable_self_collisions=False,
-        parse_visuals_as_colliders=True,
-        # limit_kd=1e1,
+        parse_visuals_as_colliders=True
     )
 
 NUM_JOINTS = len(builder.joint_q) // NUM_BATCH
@@ -805,6 +811,10 @@ tape.backward(loss)
 #  Renderer setup                                                    #
 # ------------------------------------------------------------------ #
 render_model_builder = newton.ModelBuilder()
+render_model_builder.default_spring_ke = 0.0
+render_model_builder.default_spring_kd = 0.0
+render_model_builder.default_shape_cfg = builder_deft_shape_cfg
+render_model_builder.default_joint_cfg = builder_deft_joint_cfg
 render_model_urdf_path = to_absolute_path(
     os.path.join(
         os.path.dirname(__file__),
@@ -817,17 +827,7 @@ render_model_builder.add_urdf(
         wp.vec3(0.0, 0.0, 0.0),
         wp.quat_from_axis_angle(wp.vec3(1.0, 0.0, 0.0), -math.pi * 0.5),
     ),
-    floating=True,
-    # density=0.1,
-    # armature=0.1,
-    # stiffness=0.0,
-    # damping=0.0,
-    # contact_ke=1e4,
-    # contact_kd=1e2,
-    # contact_kf=1e2,
-    # contact_mu=1.0,
-    # limit_ke=1e4,
-    # limit_kd=1e1,
+    floating=True
 )
 
 render_model = render_model_builder.finalize(WP_DEVICE)
@@ -938,7 +938,7 @@ def optimize(it):
         )
 
     # Optimize grad step
-    with wp.ScopedCapture(device="cuda") as apply_grad_capture:
+    with wp.ScopedCapture(device=WP_DEVICE) as apply_grad_capture:
         wp.launch(
             kernel=wp_kernel_apply_grad_step,
             dim=NUM_BATCH * (NUM_JOINTS - 5),

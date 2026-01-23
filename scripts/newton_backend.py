@@ -101,16 +101,17 @@ class NewtonBackend:
         newton.eval_fk(model, model.joint_q, model.joint_qd, self.state_0)
 
         # Model solver
-        self.solver = newton.solvers.SolverMuJoCo(model,
-                                                  solver="newton",
-                                                  integrator="implicitfast",
-                                                  njmax=200,
-                                                  nconmax=150,
-                                                  impratio=10.0,
-                                                  cone="elliptic",
-                                                  iterations=100,
-                                                  ls_iterations=50,
-                                                  use_mujoco_cpu=False)
+        if not self.kinematic_mode:
+            self.solver = newton.solvers.SolverMuJoCo(model,
+                                                      solver="newton",
+                                                      integrator="implicitfast",
+                                                      njmax=200,
+                                                      nconmax=150,
+                                                      impratio=10.0,
+                                                      cone="elliptic",
+                                                      iterations=100,
+                                                      ls_iterations=50,
+                                                      use_mujoco_cpu=False)
 
         # States
         self.state_1 = model.state()
