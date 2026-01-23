@@ -52,6 +52,24 @@ WP_LOSS_DIFFERENTIABLE = True
 #  Warp kernels                                                                 #
 # ---------------------------------------------------------------------------- #
 
+
+@wp.kernel
+def transform_single_mesh_points(
+        # inputs
+        mesh_points: wp.array(dtype=wp.vec3),
+        transform: wp.transform,
+        scaling: wp.vec3,
+        # outputs
+        transformed_mesh_points: wp.array(dtype=wp.vec3)):
+    tid = wp.tid()
+    # First scale the body points expressed in body-centric coordinate system
+    transformed_mesh_points[tid] = wp.cw_mul(scaling, mesh_points[tid])
+
+    # Now transform the scaled points
+    transformed_mesh_points[tid] = \
+        wp.transform_point(transform, transformed_mesh_points[tid])
+
+
 @wp.kernel
 def wp_kernel_copy_joint_q_for_render(
         # inputs
@@ -521,7 +539,7 @@ get_collect_grasps_config()
 
 NUM_DIRS: int = getattr(cfg.collector_config, "num_dirs", 7)
 NUM_BATCH: int = getattr(cfg.collector_config, "batch_size", 4)
-NUM_ITERS: int = getattr(cfg.collector_config, "num_iters", 30_001)
+NUM_ITERS: int = getattr(cfg.collector_config, "num_iters", 15_001)
 
 dt: float = getattr(cfg.collector_config, "dt", 1e-2)
 lr: float = getattr(cfg.collector_config, "lr", 2e-4)
@@ -591,27 +609,13 @@ for _ in range(NUM_BATCH):
         parse_visuals_as_colliders=True
     )
 
-NUM_JOINTS = len(builder.joint_q) // NUM_BATCH
-# builder.joint_count != len(builder.joint_q)
-
-# Finalise model ---------------------------------------------------- #
+# Disable mutual collision between any pair of batched hands' shapes
 builder.shape_collision_filter_pairs = {
     (i, j) for i in range(builder.shape_count) for j in range(builder.shape_count)
 }
 
-model = builder.finalize(WP_DEVICE)
-model.requires_grad = WP_LOSS_DIFFERENTIABLE
-model.ground = True
-model.joint_attach_ke = 1600.0
-model.joint_attach_kd = 20.0
-
-state = model.state()
-contacts = model.collide(state)
-
-NUM_CONTACTS = len(contacts.rigid_contact_shape0) // NUM_BATCH
-
-model.joint_q.requires_grad = WP_LOSS_DIFFERENTIABLE
-state.body_q.requires_grad = WP_LOSS_DIFFERENTIABLE
+NUM_JOINTS = len(builder.joint_q) // NUM_BATCH
+# builder.joint_count != len(builder.joint_q)
 
 # ------------------------------------------------------------------ #
 #  Load target object mesh                                           #
@@ -627,6 +631,17 @@ if obj_set == "ycb-tetwild":
     obj_path = f"/assets/ycb-tetwild/{obj_name}.ply"
 
 obj_mesh_tri = tri.load_mesh(to_absolute_path(obj_path))
+
+obj_body_id = builder.add_link()
+obj_newton_mesh = newton.Mesh(obj_mesh_tri.vertices, obj_mesh_tri.faces.flatten(),
+                              obj_mesh_tri.vertex_normals.flatten(),
+                              compute_inertia=False)
+builder.add_shape(
+    body=obj_body_id,
+    type=newton.GeoType.MESH,
+    xform=wp.transform_identity(),
+    src=obj_newton_mesh
+)
 
 # Warp representations --------------------------------------------- #
 joint_limit_lower = wp.array(
@@ -663,6 +678,7 @@ obj_mesh_vert_normals = wp.array(
 obj_mesh = wp.Mesh(obj_mesh_verts, obj_mesh_inds)
 obj_mesh.refit()
 obj_meshes = {"obj": obj_mesh}
+obj_newton_meshes = {"obj": obj_newton_mesh}
 
 # ------------------------------------------------------------------ #
 #  Compute object centre-of-mass and an approximate inertia scalar    #
@@ -702,6 +718,22 @@ loss_self_interp = wp.zeros_like(loss)
 loss_hand_obj_interp = wp.zeros_like(loss)
 
 padding = wp.zeros(1, dtype=float, device=WP_DEVICE, requires_grad=WP_LOSS_DIFFERENTIABLE)
+
+# Finalise model ---------------------------------------------------- #
+model = builder.finalize(WP_DEVICE)
+model.requires_grad = WP_LOSS_DIFFERENTIABLE
+model.ground = True
+model.joint_attach_ke = 1600.0
+model.joint_attach_kd = 20.0
+
+state = model.state()
+contacts = model.collide(state)
+
+NUM_CONTACTS = model.rigid_contact_max // NUM_BATCH
+assert NUM_CONTACTS
+
+model.joint_q.requires_grad = WP_LOSS_DIFFERENTIABLE
+state.body_q.requires_grad = WP_LOSS_DIFFERENTIABLE
 
 
 # ------------------------------------------------------------------ #
@@ -843,6 +875,8 @@ renderer.set_model(render_model, render_model_builder)
 stats = {
     "loss": np.zeros(NUM_ITERS),
     "hand_q": np.zeros((NUM_ITERS, NUM_BATCH, len(model.joint_q))),
+    "obj_q": np.zeros((NUM_ITERS, NUM_BATCH, NUM_DIRS, 3)),
+    "obj_ang": np.zeros((NUM_ITERS, NUM_BATCH, NUM_DIRS, 3)),
 }
 
 output_dir = Path(
@@ -921,6 +955,8 @@ def optimize(it):
     step_it_total_loss = loss_np[0]
     stats["loss"][it] = step_it_total_loss
     stats["hand_q"][it, :, :] = model.joint_q.numpy()
+    stats["obj_q"][it, :, :, :] = obj_q.numpy()
+    stats["obj_ang"][it, :, :, :] = obj_ang.numpy()
 
     if it % 1000 == 0:
         grad_norm = np.linalg.norm(tape.gradients[model.joint_q].numpy())
@@ -974,7 +1010,9 @@ def render_batches(it, save_results=False):
         #  Final grasp render                                    #
         # ------------------------------------------------------ #
         if RENDER_FINAL:
-            render_batch(batch_idx, model.joint_q)
+            render_batch(batch_idx, model.joint_q,
+                         wp.vec3(stats["obj_q"][-1, -1, -1, :]),
+                         wp.vec3(stats["obj_ang"][-1, -1, -1, :]))
 
         # ------------------------------------------------------ #
         #  Optimisation trajectory render                         #
@@ -982,12 +1020,29 @@ def render_batches(it, save_results=False):
         elif RENDER_TRAJ:
             if it % 50 != 0:
                 continue
-            render_batch(batch_idx, wp.array(stats["hand_q"][it, batch_idx, :], dtype=wp.float32))
+            render_batch(batch_idx, wp.array(stats["hand_q"][it, batch_idx, :], dtype=wp.float32),
+                         wp.vec3(stats["obj_q"][it, batch_idx, -1, :]),
+                         wp.vec3(stats["obj_ang"][it, batch_idx, -1, :]))
 
 
-def render_batch(batch_idx: int, batch_joint_q: wp.array(dtype=float)) -> None:
+def render_batch(batch_idx: int, batch_joint_q: wp.array(dtype=float),
+                 batch_obj_q: wp.vec3, batch_obj_ang: wp.vec3) -> None:
     # Update [renderer.joint_target_controls]
     with wp.ScopedDevice(renderer.wp_device):
+        # Copy obj_q, obj_ang
+        for obj_name, obj_mesh in obj_meshes.items():
+            wp.launch(kernel=transform_single_mesh_points,
+                      dim=len(obj_mesh.points),
+                      inputs=[obj_newton_meshes[obj_name].mesh.points,
+                              wp.transform(batch_obj_q, wp.quat_from_axis_angle(wp.normalize(batch_obj_ang),
+                                                                                wp.norm_l2(batch_obj_ang))),
+                              wp.vec3(1, 1, 1)],
+                      outputs=[obj_mesh.points],
+                      device=WP_DEVICE)
+
+            # Refit the object with its transformed points
+            obj_mesh.refit()
+
         # Hand joints
         wp.launch(
             kernel=wp_kernel_copy_joint_q_for_render,
@@ -1024,7 +1079,7 @@ if __name__ == "__main__":
         print(b, "Visualizing Grasps...")
         for _ in range(NUM_ITERS):
             with wp.ScopedTimer("render", active=False):
-                render_batches(_, save_results=True)
+                render_batches(_, save_results=False)
 
     # Close viewer
     renderer.viewer.close()
