@@ -11,9 +11,9 @@ configuration.  Optionally, the script can export USD files that visualise the
 final grasp and the full optimisation trajectory.
 """
 
-# ---------------------------------------------------------------------------- #
-#  Imports                                                                     #
-# ---------------------------------------------------------------------------- #
+# ----------------------------------------------------------------------------
+#  Imports                     
+# ----------------------------------------------------------------------------
 import os
 import math
 import uuid
@@ -32,7 +32,7 @@ import warp as wp
 from newton_backend import NewtonBackend
 from utils import rotation_matrix_between, rot_disp_for_dir, project_to_plane, gravity_vector_for_dir, leaky_max
 
-# ---------------------------------------------------------------------------- #
+# ----------------------------------------------------------------------------
 wp.init()
 # wp.config.cache_kernels = False
 # wp.config.verify_autograd_array_access = True
@@ -48,9 +48,9 @@ WP_DEVICE = "cuda:0"
 WP_LOSS_DIFFERENTIABLE = True
 
 
-# ---------------------------------------------------------------------------- #
-#  Warp kernels                                                                 #
-# ---------------------------------------------------------------------------- #
+# ----------------------------------------------------------------------------
+#  Warp kernels                 
+# ----------------------------------------------------------------------------
 
 
 @wp.kernel
@@ -88,9 +88,9 @@ def wp_kernel_copy_joint_q_for_render(
     dst_joint_q[tid] = src_joint_q[src_offset + tid]
 
 
-# -------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------
 #  Reset per-iteration buffers, now including rotational state               #
-# -------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------
 @wp.kernel
 def wp_kernel_reset_buffers(
         obj_q: wp.array(dtype=wp.vec3, ndim=2),  # N_BATCH × N_DIRS (translation)
@@ -130,9 +130,9 @@ def wp_kernel_reset_buffers(
         loss_hand_pose_upper[0] = 0.0
 
 
-# -------------------------------------------------------------------------- #
-#  Contact response kernel (translation + rotation)                          #
-# -------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------
+#  Contact response kernel (translation + rotation)                          
+# --------------------------------------------------------------------------
 @wp.kernel
 def wp_kernel_contact_step_kernel(
         # inputs
@@ -163,23 +163,23 @@ def wp_kernel_contact_step_kernel(
     Compute contact response for each (batch, direction, contact) tuple.
     """
 
-    # --------------------------------------------------------------------- #
-    #  Thread indexing                                                      #
-    # --------------------------------------------------------------------- #
+    # ---------------------------------------------------------------------
+    #  Thread indexing      
+    # ---------------------------------------------------------------------
     tid = wp.tid()
     batch_idx = tid // (NUM_DIRS * NUM_CONTACTS)
     dir_idx = (tid % (NUM_DIRS * NUM_CONTACTS)) // NUM_CONTACTS
     contact_idx = tid % NUM_CONTACTS
 
-    # --------------------------------------------------------------------- #
-    #  Directional perturbations (translation + rotation)                   #
-    # --------------------------------------------------------------------- #
+    # ---------------------------------------------------------------------
+    #  Directional perturbations (translation + rotation)   
+    # ---------------------------------------------------------------------
     trans_disp = gravity_vector_for_dir(dir_idx)
     rot_disp = rot_disp_for_dir(dir_idx)
 
-    # --------------------------------------------------------------------- #
-    #  World-space contact point                                            #
-    # --------------------------------------------------------------------- #
+    # ---------------------------------------------------------------------
+    #  World-space contact point               
+    # ---------------------------------------------------------------------
     model_contact_idx = batch_idx * NUM_CONTACTS + contact_idx
 
     shape_idx = contact_shape0[model_contact_idx]
@@ -197,9 +197,9 @@ def wp_kernel_contact_step_kernel(
     obj_angd_unconstrained = rot_disp * dt
     obj_ang_unconstrained = obj_angd_unconstrained * dt
 
-    # --------------------------------------------------------------------- #
-    #  Mesh query                                                           #
-    # --------------------------------------------------------------------- #
+    # ---------------------------------------------------------------------
+    #  Mesh query           
+    # ---------------------------------------------------------------------
     max_dist = wp.float32(1e8)
     query = wp.mesh_query_point(obj_mesh_id, contact_x, max_dist)
     face_index = query.face
@@ -233,9 +233,9 @@ def wp_kernel_contact_step_kernel(
     closest_pt = r + obj_q_unconstrained
     # wp.printf("%.8f %.8f %.8f\n", obj_q_unconstrained[0], obj_q_unconstrained[1], obj_q_unconstrained[2])
 
-    # ------------------------------------------------------------------ #
-    #  Side of plane test                                                #
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
+    #  Side of plane test
+    # ------------------------------------------------------------------
     interp_n = wp.normalize(face_u * n0 + face_v * n1 + face_w * n2)
     dot_prod = wp.dot(interp_n, contact_x - r)
 
@@ -245,37 +245,30 @@ def wp_kernel_contact_step_kernel(
         sign = -1.0
 
     # Signed distance plus padding
-    if sign < 0.0:
-        d = -wp.length(contact_x - closest_pt) - padding[0]
-    else:
-        d = wp.length(contact_x - closest_pt) - padding[0]
+    # d=sign⋅∥contact_x−closest_pt∥−padding
+    d = sign * wp.length(contact_x - closest_pt) - padding[0]
 
-    # ------------------------------------------------------------------ #
-    #  Contact impulse                                                   #
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
+    # Contact impulse
+    # λ = −C/∥obj_delta_q∥^2 +ϵ
+    # ------------------------------------------------------------------
     if d < -0.01:
         wp.atomic_add(loss_hand_obj_interp, 0, w_hand_obj_interp * d * d)
 
-    C = 0.0
     d_inv = -d  # positive when penetration
     C = leaky_max(d_inv, 0.0, 0.1)
 
-    if sign < 0.0:
-        n = -wp.normalize(contact_x - closest_pt)
-    else:
-        n = wp.normalize(contact_x - closest_pt)
-
-    hand_delta_q = n
+    hand_delta_q = sign * wp.normalize(contact_x - closest_pt)
     obj_delta_q = -hand_delta_q
 
     eps = 1e-5
     lmbda = (-C) / (wp.length(obj_delta_q) * wp.length(obj_delta_q) + eps)
 
-    # ------------------------------------------------------------------ #
-    #  Coulomb friction (tangential impulse)                             #
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
+    #  Coulomb friction (tangential impulse)
+    # ------------------------------------------------------------------
     # Tangential component of unconstrained velocity
-    t_vec = obj_qd_unconstrained - wp.dot(obj_qd_unconstrained, n) * n
+    t_vec = obj_qd_unconstrained - wp.dot(obj_qd_unconstrained, hand_delta_q) * hand_delta_q
     t_len = wp.length(t_vec)
 
     if t_len > 1.0e-8:
@@ -302,9 +295,9 @@ def wp_kernel_contact_step_kernel(
             obj_angd, batch_idx, dir_idx, fric_ang_vel / float(NUM_CONTACTS)
         )
 
-    # ------------------------------------------------------------------ #
-    #  Compute torque / angular displacement                              #
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
+    #  Compute torque / angular displacement 
+    # ------------------------------------------------------------------
 
     # Vector from COM to contact point (approx)
     r_vec = contact_x - obj_com
@@ -315,9 +308,9 @@ def wp_kernel_contact_step_kernel(
     # Angular velocity
     ang_vel = ang_delta / dt
 
-    # ------------------------------------------------------------------ #
-    #  Accumulate object displacements (trans + rot)                      #
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
+    #  Accumulate object displacements (trans + rot)      
+    # ------------------------------------------------------------------
     if contact_idx == 0:
         wp.atomic_add(obj_q, batch_idx, dir_idx, obj_q_unconstrained)
         wp.atomic_add(obj_qd, batch_idx, dir_idx, obj_qd_unconstrained)
@@ -409,16 +402,16 @@ def wp_kernel_compute_total_loss(
     """
     tid = wp.tid()
 
-    # ------------------------------------------------------------------ #
-    #  Loss terms independent of thread                                  #
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
+    #  Loss terms independent of thread     
+    # ------------------------------------------------------------------
     if tid == 0:
         wp.atomic_add(loss, 0, loss_self_interp[0])
         wp.atomic_add(loss, 0, loss_hand_obj_interp[0])
 
-    # ------------------------------------------------------------------ #
-    #  Joint-based regularisation                                        #
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
+    #  Joint-based regularisation           
+    # ------------------------------------------------------------------
     batch_idx = tid // (NUM_JOINTS - 7)
     joint_local_idx = tid % (NUM_JOINTS - 7) + 7  # skip base joints
 
@@ -447,9 +440,9 @@ def wp_kernel_compute_total_loss(
         wp.atomic_add(loss_hand_pose_upper, 0, l_upper)
         wp.atomic_add(loss, 0, l_upper)
 
-    # ------------------------------------------------------------------ #
-    #  Object motion loss                                                #
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
+    #  Object motion loss
+    # ------------------------------------------------------------------
     batch_idx_obj = tid // NUM_DIRS
     dir_idx_obj = tid % NUM_DIRS
 
@@ -480,19 +473,16 @@ def wp_kernel_apply_grad_step(
     Apply SGD-style update step with simple per-component learning-rates.
     """
     tid = wp.tid()
-    batch_idx = tid // (NUM_JOINTS - 5)
-    joint_local_idx = tid % (NUM_JOINTS - 5)
+    batch_idx = tid // NUM_JOINTS
+    joint_local_idx = tid % NUM_JOINTS
 
     offset = batch_idx * NUM_JOINTS
 
-    # Base translation --------------------------------------------------- #
-    if joint_local_idx == 0:  # and joint_local_idx == cyclic_idx:
+    # Base pose
+    if joint_local_idx == 0:
         wp.atomic_sub(hand_q, offset + 0, 1e-3 * lr * hand_q_grad[offset + 0])
         wp.atomic_sub(hand_q, offset + 1, 1e-3 * lr * hand_q_grad[offset + 1])
         wp.atomic_sub(hand_q, offset + 2, 1e-3 * lr * hand_q_grad[offset + 2])
-
-    # Base orientation --------------------------------------------------- #
-    elif joint_local_idx == 1:  # and joint_local_idx == cyclic_idx:
         wp.atomic_sub(hand_q, offset + 3, 1e-2 * lr * hand_q_grad[offset + 3])
         wp.atomic_sub(hand_q, offset + 4, 1e-2 * lr * hand_q_grad[offset + 4])
         wp.atomic_sub(hand_q, offset + 5, 1e-2 * lr * hand_q_grad[offset + 5])
@@ -511,16 +501,15 @@ def wp_kernel_apply_grad_step(
         hand_q[offset + 5] = q[2]
         hand_q[offset + 6] = q[3]
 
-    # Articulated joints ------------------------------------------------- #
-    # elif joint_local_idx == cyclic_idx:
-    else:
-        joint_idx = offset + joint_local_idx + 5
+    # Articulated joints
+    elif joint_local_idx >= 7:
+        joint_idx = offset + joint_local_idx
         wp.atomic_sub(hand_q, joint_idx, lr * hand_q_grad[joint_idx])
 
 
-# ---------------------------------------------------------------------------- #
-#  Main optimisation loop                                                       #
-# ---------------------------------------------------------------------------- #
+# ----------------------------------------------------------------------------
+#  Main optimisation loop       
+# ----------------------------------------------------------------------------
 cfg = None
 
 
@@ -531,15 +520,15 @@ def get_collect_grasps_config(cfg_: DictConfig) -> None:
 
 
 get_collect_grasps_config()
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
 #  Global constants / hyper-parameters (config-driven)               #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
 # All parameters are configurable via Hydra; the defaults reproduce
 # the original behaviour and work with existing configuration files.
 
 NUM_DIRS: int = getattr(cfg.collector_config, "num_dirs", 7)
 NUM_BATCH: int = getattr(cfg.collector_config, "batch_size", 4)
-NUM_ITERS: int = getattr(cfg.collector_config, "num_iters", 15_001)
+NUM_ITERS: int = getattr(cfg.collector_config, "num_iters", 5_001)
 
 dt: float = getattr(cfg.collector_config, "dt", 1e-2)
 lr: float = getattr(cfg.collector_config, "lr", 2e-4)
@@ -547,20 +536,20 @@ lr: float = getattr(cfg.collector_config, "lr", 2e-4)
 # Number of random initialisations evaluated per object
 NUM_BATCH_PER_OBJ: int = getattr(cfg.collector_config, "num_batch_per_obj", 64)
 
-# Output / rendering ------------------------------------------------ #
+# Output / rendering ------------------------------------------------
 obj_set = cfg.collector_config.obj_set
 hand_name = cfg.collector_config.hand_name
 
 # Whether to export USDs of the final grasp and/or optimisation trajectory
 RENDER_FINAL: bool = getattr(cfg.collector_config, "render_final_grasp", True)
-RENDER_TRAJ: bool = getattr(cfg.collector_config, "render_opt_traj", False)
+RENDER_TRAJ: bool = getattr(cfg.collector_config, "render_opt_traj", True)
 
 # Base directory for outputs (per-object sub-folders are appended)
 base_output_dir: str = getattr(cfg.collector_config, "output_dir", "grasp_outputs")
 
-# ------------------------------------------------------------------ #
-#  Loss weighting parameters                                        #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
+#  Loss weighting parameters           
+# ------------------------------------------------------------------
 w_base: float = getattr(cfg.collector_config, "w_base_loss", 1e4)
 w_hand_obj_interp: float = getattr(cfg.collector_config, "w_hand_obj_interp_loss", 1e1)
 w_l2_mid: float = getattr(cfg.collector_config, "w_l2_mid_loss", 1.0)
@@ -568,9 +557,9 @@ w_limit: float = getattr(cfg.collector_config, "w_limit_loss", 1e2)
 # Friction coefficient (Coulomb)
 mu_friction: float = getattr(cfg.collector_config, "friction_mu", 0.5)
 
-# ------------------------------------------------------------------ #
-#  Build simulation model                                            #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
+#  Build simulation model               
+# ------------------------------------------------------------------
 builder = newton.ModelBuilder()
 gripper_urdf_path = to_absolute_path(
     os.path.join(
@@ -617,9 +606,9 @@ builder.shape_collision_filter_pairs = {
 NUM_JOINTS = len(builder.joint_q) // NUM_BATCH
 # builder.joint_count != len(builder.joint_q)
 
-# ------------------------------------------------------------------ #
-#  Load target object mesh                                           #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
+#  Load target object mesh              
+# ------------------------------------------------------------------
 obj_name = cfg.collector_config.obj_name
 
 obj_path = os.path.join("../assets/", obj_set, f"{obj_name}.obj")
@@ -643,7 +632,7 @@ builder.add_shape(
     src=obj_newton_mesh
 )
 
-# Warp representations --------------------------------------------- #
+# Warp representations ---------------------------------------------
 joint_limit_lower = wp.array(
     data=np.asarray(builder.joint_limit_lower, dtype=np.float32),
     dtype=float,
@@ -680,29 +669,29 @@ obj_mesh.refit()
 obj_meshes = {"obj": obj_mesh}
 obj_newton_meshes = {"obj": obj_newton_mesh}
 
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
 #  Compute object centre-of-mass and an approximate inertia scalar    #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
 obj_com_np: np.ndarray = obj_mesh_tri.vertices.mean(axis=0)
 obj_com_vec = wp.vec3(float(obj_com_np[0]), float(obj_com_np[1]), float(obj_com_np[2]))
 
 # Simple bounding-sphere approximation of the moment of inertia.      #
 # This is sufficient for distributing impulse between translation     #
-# and rotation in a grasp-planning context.                           #
+# and rotation in a grasp-planning context.                           
 radius = np.linalg.norm(obj_mesh_tri.vertices - obj_com_np, axis=1).max()
 inertia_scalar = float((2.0 / 5.0) * radius * radius)  # m=1 assumed
 
 obj_mesh_id = obj_mesh.id
 
-# ------------------------------------------------------------------ #
-#  Allocate optimisation buffers                                     #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
+#  Allocate optimisation buffers        
+# ------------------------------------------------------------------
 obj_q = wp.zeros((NUM_BATCH, NUM_DIRS), dtype=wp.vec3, device=WP_DEVICE, requires_grad=WP_LOSS_DIFFERENTIABLE)
 obj_qd = wp.zeros_like(obj_q)
 
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
 #  New buffers for rotational motion (orientation/ang. velocity)      #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
 # We represent small orientation changes as an axis-angle vector      #
 # capturing the integrated angular displacement for each optimisation
 # step.  The corresponding time-derivative stores angular velocity.    #
@@ -719,7 +708,7 @@ loss_hand_obj_interp = wp.zeros_like(loss)
 
 padding = wp.zeros(1, dtype=float, device=WP_DEVICE, requires_grad=WP_LOSS_DIFFERENTIABLE)
 
-# Finalise model ---------------------------------------------------- #
+# Finalise model ----------------------------------------------------
 model = builder.finalize(WP_DEVICE)
 model.requires_grad = WP_LOSS_DIFFERENTIABLE
 model.ground = True
@@ -736,9 +725,9 @@ model.joint_q.requires_grad = WP_LOSS_DIFFERENTIABLE
 state.body_q.requires_grad = WP_LOSS_DIFFERENTIABLE
 
 
-# ------------------------------------------------------------------ #
-#  Build grasp optimizing graph                                      #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
+#  Build grasp optimizing graph         
+# ------------------------------------------------------------------
 def optimize_grasp():
     # Reset buffers
     wp.launch(
@@ -839,9 +828,9 @@ tape.backward(loss)
 # in the visualizing graph [tape.svg], ones specified with `requires_grad=True`
 # tape.visualize(filename="tape.dot")  # Then type: `dot -Tsvg tape.dot -o tape.svg`
 
-# ------------------------------------------------------------------ #
-#  Renderer setup                                                    #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
+#  Renderer setup    
+# ------------------------------------------------------------------
 render_model_builder = newton.ModelBuilder()
 render_model_builder.default_spring_ke = 0.0
 render_model_builder.default_spring_kd = 0.0
@@ -869,9 +858,9 @@ render_model.gravity.assign(WP_GRAVITY_ZERO)
 renderer = NewtonBackend(kinematic_mode=True)
 renderer.set_model(render_model, render_model_builder)
 
-# ------------------------------------------------------------------ #
-#  Statistics buffer                                                 #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
+#  Statistics buffer 
+# ------------------------------------------------------------------
 stats = {
     "loss": np.zeros(NUM_ITERS),
     "hand_q": np.zeros((NUM_ITERS, NUM_BATCH, len(model.joint_q))),
@@ -887,9 +876,9 @@ output_dir = Path(
 output_dir.mkdir(parents=True, exist_ok=True)
 
 
-# ------------------------------------------------------------------ #
-# Initial hand pose sampling --------------------------------------- #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
+# Initial hand pose sampling ---------------------------------------
+# ------------------------------------------------------------------
 def sample_init_hand_pose():
     joint_q_init = np.zeros((NUM_BATCH, NUM_JOINTS))
     for batch_idx in range(NUM_BATCH):
@@ -925,13 +914,13 @@ def sample_init_hand_pose():
     state.joint_q.assign(joint_q_init.flatten())
 
 
-# ------------------------------------------------------------------ #
-# Grasp Optimization step                                            #
-# ------------------------------------------------------------------ #
+# ------------------------------------------------------------------
+# Grasp Optimization step               
+# ------------------------------------------------------------------
 def optimize(it):
     if it >= NUM_ITERS:
         return
-    # Iterative optimisation --------------------------------------- #
+    # Iterative optimisation ---------------------------------------
     tape.zero()
 
     cutoff = 8000
@@ -977,11 +966,10 @@ def optimize(it):
     with wp.ScopedCapture(device=WP_DEVICE) as apply_grad_capture:
         wp.launch(
             kernel=wp_kernel_apply_grad_step,
-            dim=NUM_BATCH * (NUM_JOINTS - 5),
+            dim=NUM_BATCH * NUM_JOINTS,
             inputs=[
                 tape.gradients[model.joint_q],
                 lr,
-                # (NUM_JOINTS - 5) - (it % (NUM_JOINTS - 5)) - 1,
                 NUM_JOINTS,
             ],
             outputs=[model.joint_q],
@@ -991,9 +979,9 @@ def optimize(it):
 
 
 def render_batches(it, save_results=False):
-    # ------------------------------------------------------------------ #
-    #  Render and save successful optimisation results                            #
-    # ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------
+    #  Render and save successful optimisation results                            
+    # ------------------------------------------------------------------
     if (np.any(np.isnan(stats["loss"])) or np.any(np.isinf(stats["loss"]))):
         return
     if save_results:
@@ -1006,17 +994,17 @@ def render_batches(it, save_results=False):
             path_npy = output_dir / f"{uid}.npy"
             np.save(path_npy, model_joint_q_np[batch_idx, :])
 
-        # ------------------------------------------------------ #
-        #  Final grasp render                                    #
-        # ------------------------------------------------------ #
+        # ------------------------------------------------------
+        #  Final grasp render       
+        # ------------------------------------------------------
         if RENDER_FINAL:
             render_batch(batch_idx, model.joint_q,
                          wp.vec3(stats["obj_q"][-1, -1, -1, :]),
                          wp.vec3(stats["obj_ang"][-1, -1, -1, :]))
 
-        # ------------------------------------------------------ #
-        #  Optimisation trajectory render                         #
-        # ------------------------------------------------------ #
+        # ------------------------------------------------------
+        #  Optimisation trajectory render                         
+        # ------------------------------------------------------
         elif RENDER_TRAJ:
             if it % 50 != 0:
                 continue
@@ -1063,7 +1051,7 @@ def render_batch(batch_idx: int, batch_joint_q: wp.array(dtype=float),
         renderer.render(obj_meshes)
 
         # Slow down a bit for leisure views
-        renderer.sleep(0.25)
+        renderer.sleep(0.5)
 
 
 # ------------------------------------------------------------------------------#
